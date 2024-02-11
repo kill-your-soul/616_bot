@@ -1,0 +1,31 @@
+version: '3'
+
+
+services:
+  bot:
+    env_file:
+      - .env
+    build: .
+    volumes:
+      - ./logs.log:/bot/logs.log
+      - ./616_bot:/bot/616_bot
+    depends_on:
+      - mongodb
+      - redis
+  mongodb:
+    image: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - dbdata:/data/db
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/root/redis
+      # - redis.conf:/usr/local/etc/redis/redis.conf
+    
+volumes:
+  dbdata:
+  redisdata:
