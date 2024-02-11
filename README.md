@@ -6,7 +6,7 @@ Bot for booking
 2. Docker compose 
 
 # Run in docker
-```bash
+    ```bash
     docker-compose up -d --build
-```
+    ```
 
