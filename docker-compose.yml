@@ -13,6 +13,8 @@ services:
       - mongodb
       - redis
   mongodb:
+    env_file:
+      - .env
     image: mongo
     ports:
       - "27017:27017"
@@ -20,8 +22,8 @@ services:
       - dbdata:/data/db
   redis:
     image: redis
-    ports:
-      - "6379:6379"
+    # ports:
+      # - "6379:6379"
     volumes:
       - redisdata:/root/redis
       # - redis.conf:/usr/local/etc/redis/redis.conf

@@ -5,7 +5,9 @@ from keyboards import (
     keyboard_available_dates,
     keyboard_available_dates_inline,
     start_time_keyboard,
+    start_time_night_keyboard,
     end_time_keyboard,
+    end_time_keyboard_night,
     approvement_keyboard,
     pay_inline_keyboard,
 )
@@ -15,6 +17,8 @@ from states.start import Start
 from loguru import logger
 from handlers.start.start import start_booking_handler
 from database import write_booking
+from utils.sum import count_sum
+from utils.date import determine_month
 from typing import Dict, Any
 import os
 import json
@@ -26,22 +30,19 @@ async def menu_handler(message: Message, state: FSMContext):
     await state.update_data(service=message.text)
     keyboard = await sound_engineers()
     await message.answer(
-        "Выбери звукорежжисера:\n\n"
-
-"VICEYY (ссылка на примеры работ)\n"
-"Стаж: 6 лет\n"
-"Основные жанры: hip-hop, new school rap, underground\n\n"
-
-"DIEZE (ссылка на примеры работ)\n"
-"Стаж: 4 года\n"
-"Основные жанры: trap, r&b, techno\n\n"
-
-"AKSENIY (ссылка на примеры работ)\n"
-"Стаж: 5 лет\n"
-"Основные жанры: hip-hop, rock, underground\n\n"
-
-"Если тебе нужна срочная запись или специалист не имеет значение, нажми кнопку <i>'Не имеет значения'</i>." ,
-        reply_markup=keyboard, parse_mode='html'
+        "Выбери звукорежиссера:\n\n"
+        "VICEYY <a href='https://vk.com/music/playlist/-171812248_1_ddeed634b65ab0a356'>(ссылка на примеры работ)</a>\n"
+        "Стаж: 6 лет\n"
+        "Основные жанры: hip-hop, new school rap, underground\n\n"
+        "DIEZE <a href='https://vk.com/music/playlist/-171812248_3_880334b157b3791d4a'>(ссылка на примеры работ)</a>\n"
+        "Стаж: 4 года\n"
+        "Основные жанры: trap, r&b, techno\n\n"
+        "AKSENIY <a href='https://vk.com/music/playlist/-171812248_2_a50dc5347aa81298cc'>(ссылка на примеры работ)</a>\n"
+        "Стаж: 5 лет\n"
+        "Основные жанры: hip-hop, rock, underground\n\n"
+        "Если тебе нужна срочная запись или специалист не имеет значения, нажми кнопку <i>'Не имеет значения'</i>.",
+        reply_markup=keyboard,
+        parse_mode="html",
     )
     await state.set_state(Booking.engineer)
 
@@ -53,7 +54,8 @@ async def date_handler(message: Message, state: FSMContext) -> None:
     logger.debug(data)
     logger.debug(f"service: {data.get('service', '')}")
     await message.answer(
-        "сообщ выберите дату." "+ тут будет пояснение как именно выбирается дата",
+        "Выбери дату:\n\n"
+        "В клавиатуре отображаются все доступные даты у данного звукорежиссера на ближайшие 2 недели.",
         reply_markup=keyboard,
     )
     if data.get("service", "") == "ночь на студии":
@@ -86,8 +88,11 @@ async def start_time_handler(message: Message, state: FSMContext) -> None:
     logger.debug(f"Chosen day: {day}")
     logger.debug(data)
     keyboard = await start_time_keyboard(day)
+    if data['service'].lower() == 'час на студии (ночь)':
+        keyboard = await start_time_night_keyboard(day)
     await message.answer(
-        "Выберите время начала записи, и бот сам выдаст доступные диапазоны (минимум за 12 ч до)",
+        "Выбери время:\n\n"
+        "Обрати внимание: время указано в 24-часовом формате. В следующем шаге бот предложит выбрать доступное время окончания записи.",
         reply_markup=keyboard,
     )
     await state.set_state(Booking.end_time)
@@ -99,7 +104,13 @@ async def end_time_handler(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     # logger.debug(data)
     keyboard = await end_time_keyboard(data["day"], data["start_time"])
-    await message.answer("выберите время окончания записи", reply_markup=keyboard)
+    if data['service'].lower() == 'час на студии (ночь)':
+        keyboard = await end_time_keyboard_night(data["day"], data["start_time"])
+    await message.answer(
+        "Выбери время окончания записи:\n\n"
+        "Обрати внимание: если ты хочешь записаться на время, которое включает и дневной и ночной диапазон, необходимо отдельно записаться на каждый временной промежуток.",
+        reply_markup=keyboard,
+    )
     await state.set_state(Booking.approvement)
 
 
@@ -108,24 +119,33 @@ async def approvement_handler(message: Message, state: FSMContext) -> None:
     end_time = message.text
     await state.update_data(end_time=end_time)
     data = await state.get_data()
-    # TODO: count sum
     keyboard = await approvement_keyboard()
     await state.set_state(Booking.end)
-    if not data.get("name_og_engineer"):
-        # TODO: изменить текст
-        await message.answer(
-        f"""сообщ-подтвержд 
-услуга: {data['service']}  
-время: {data['start_time']} - {data['end_time']}""",
-        reply_markup=keyboard,
+    times: int = int(data["end_time"].split(":")[0]) - int(
+        data["start_time"].split(":")[0]
     )
+    price = await count_sum(data["service"], times)
+    await state.update_data(price=price)
+    if not data.get("name_of_engineer"):
+        await message.answer(
+            f"Подтверждение бронирования:\n\n"
+            f"Услуга: {data['service']}\n"
+            f"Время: {data['start_time']} - {data['end_time']}\n"
+            f"Дата: {data['day']}.{str(determine_month(int(data['day']))).zfill(2)}\n"
+            f"Общая стоимость услуг: {price}\n\n"
+            f'Если всё верно, жми "Записаться"',
+            reply_markup=keyboard,
+        )
     else:
         await message.answer(
-        f"""сообщ-подтвержд 
-услуга: {data['service']} 
-звукарь: {data['name_of_engineer']} 
-время: {data['start_time']} - {data['end_time']}""",
-        reply_markup=keyboard,
+            f"Подтверждение бронирования:\n\n"
+            f"Услуга: {data['service']}\n"
+            f"Звукорежиссёр: {data['name_of_engineer']}\n"
+            f"Время: {data['start_time']} - {data['end_time']}\n"
+            f"Дата: {data['day']}.{str(determine_month(int(data['day']))).zfill(2)}\n"
+            f"Общая стоимость услуг: {price}\n\n"
+            f'Если всё верно, жми "Записаться"',
+            reply_markup=keyboard,
         )
 
 
@@ -134,51 +154,65 @@ async def approvement_night_handler(message: Message, state: FSMContext) -> None
     await state.update_data(day=message.text)
     keyboard = await approvement_keyboard()
     data = await state.get_data()
-    # TODO: count sum
+    price = await count_sum(data["service"])
     await message.answer(
-        f"""сообщ-подтвержд 
-услуга: {data['service']} 
-звукарь: {data['name_of_engineer']} 
-время: {data['start_time']} - {data['end_time']}""",
+        f"Подтверждение бронирования:\n\n"
+        f"Услуга: {data['service']}\n"
+        f"Звукорежиссёр: {data['name_of_engineer']}\n"
+        f"Время: {data['start_time']} - {data['end_time']}\n"
+        f"Дата: {data['day']}.{str(determine_month(int(data['day']))).zfill(2)}\n"
+        f"Общая стоимость услуг: {price}\n\n"
+        f'Если всё верно, жми "Записаться"',
         reply_markup=keyboard,
     )
+    await state.update_data(price=price)
     await state.set_state(Booking.end)
+
 
 @logger.catch()
 async def end(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     keyboard = await pay_inline_keyboard(message.from_user.id, data["service"])
-    #TODO: изменить текст
     await message.answer(
-        """заебись! ты успешно записался
-
-бронь считается действительной после получения предоплаты
-*реквизиты, сумма*
-после оплаты ожидай сообщения с подтверждением брони"""
+        f"Остался последний шаг! Бронь считается действительной после внесения предоплаты:\n\n"
+        f"💳 {os.environ.get('DETAILS')}\n"
+        f"💴 {int(int(data['price']) / 2)}₽\n"
+        f"📆  {data['day']}.{str(determine_month(int(data['day']))).zfill(2)}\n\n"
+        f"После оплаты ожидай сообщение о подтверждении брони. Оплатить бронь необходимо в течение 30 минут, иначе она будет автоматически отменена.\n"
     )
     await message.bot.send_message(
-        chat_id=os.environ.get("CHAT_ID"), text=str(data), reply_markup=keyboard
+        chat_id=os.environ.get("CHAT_ID"),
+        text=f"Клиент: {data['username']}\nУслуга: {data['service']}\nЗвукорежиссер: {data['name_of_engineer']}\nДата: {data['day']}.{str(determine_month(int(data['day']))).zfill(2)}\nВремя: {data['start_time']}-{data['end_time']}Стоимость: {data['price']}",
+        reply_markup=keyboard,
     )
-    # TODO: дополнить тут функционал 
     await state.set_state(Booking.waiting_for_pay)
+
 
 @logger.catch()
 async def waiting_for_pay(message: Message, state: FSMContext) -> None:
     pass
 
 
-@logger.catch
+@logger.catch()
 async def approve_handler(callback: CallbackQuery) -> None:
     logger.debug(f"Callback: {callback}")
     logger.debug(f"data: {callback.message.text} {type(callback.message.text)}")
-    text: str = callback.message.text.replace("\'", "\"")
+    text: str = callback.message.text.replace("'", '"')
     data: Dict[str, Any] = json.loads(text)
     logger.debug(f"dict: {data} {type(data)}")
     await write_booking(data)
+    logger.warning(f"data: {data.keys()}")
     # print(callback.message.text)
+    await callback.answer(text="Ты подтвердил бронь")
     await callback.bot.send_message(
         callback.data.split(":")[0],
-        f"Оплата услуги {callback.data.split(':')[1]} прошла успешно",
+        f"Бронь подтверждена!\n\n"
+        f"Дата: {data['date']}\n"
+        f"Время: {data['start_time']} - {data['end_time']}\n"
+        f"Звукорежиссер: {data['name_of_engineer']}\n"
+        f"Адрес:  ул. Казанская 7В, БЦ Казанский, пом. 616\n"
+        f"Обрати внимание: отменить бронь без потери средств можно не менее, чем за 12 часов до сеанса. Для отмены писать @room616\n\n"
+        f"До встречи в ROOM616!",
     )
 
 

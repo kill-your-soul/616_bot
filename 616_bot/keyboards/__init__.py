@@ -9,6 +9,8 @@ from database import (
     get_available_dates,
     get_available_start_time,
     get_available_end_time,
+    get_available_night_start_time,
+    get_available_end_time_night
 )
 
 
@@ -65,6 +67,16 @@ async def sound_engineers() -> ReplyKeyboardMarkup:
     return builder.as_markup(one_time_keyboard=True, resize_keyboard=True)
 
 
+async def start_time_night_keyboard(day) -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    start_times = await get_available_night_start_time(int(day))
+    logger.debug(start_times)
+    for time in start_times:
+        builder.button(text=f"{time}")
+    return builder.as_markup(one_time_keyboard=True, resize_keyboard=True)
+
+
+
 async def start_time_keyboard(day) -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     start_times = await get_available_start_time(int(day))
@@ -77,6 +89,15 @@ async def start_time_keyboard(day) -> ReplyKeyboardMarkup:
 async def end_time_keyboard(day, start_time) -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     end_times = await get_available_end_time(int(day), start_time)
+    # logger.debug(end_time)
+    for time in end_times:
+        builder.button(text=f"{time}")
+    return builder.as_markup(one_time_keyboard=True, resize_keyboard=True)
+
+
+async def end_time_keyboard_night(day, start_time) -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    end_times: list[dict[str, str]] = await get_available_end_time_night(int(day), start_time)
     # logger.debug(end_time)
     for time in end_times:
         builder.button(text=f"{time}")
