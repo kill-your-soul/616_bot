@@ -10,7 +10,8 @@ from database import (
     get_available_start_time,
     get_available_end_time,
     get_available_night_start_time,
-    get_available_end_time_night
+    get_available_end_time_night,
+    insert_temp,
 )
 
 
@@ -76,7 +77,6 @@ async def start_time_night_keyboard(day) -> ReplyKeyboardMarkup:
     return builder.as_markup(one_time_keyboard=True, resize_keyboard=True)
 
 
-
 async def start_time_keyboard(day) -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     start_times = await get_available_start_time(int(day))
@@ -97,8 +97,10 @@ async def end_time_keyboard(day, start_time) -> ReplyKeyboardMarkup:
 
 async def end_time_keyboard_night(day, start_time) -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
-    end_times: list[dict[str, str]] = await get_available_end_time_night(int(day), start_time)
-    # logger.debug(end_time)
+    end_times: list[dict[str, str]] = await get_available_end_time_night(
+        int(day), start_time
+    )
+    logger.debug(end_times)
     for time in end_times:
         builder.button(text=f"{time}")
     return builder.as_markup(one_time_keyboard=True, resize_keyboard=True)
@@ -112,7 +114,9 @@ async def approvement_keyboard() -> ReplyKeyboardMarkup:
     return builder.as_markup(one_time_keyboard=True, resize_keyboard=True)
 
 
-async def pay_inline_keyboard(chat_id: int, service: str) -> InlineKeyboardMarkup:
+async def pay_inline_keyboard(chat_id: int, data: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.button(text="Оплатил", callback_data=str(chat_id) + ":" + service)
+    _id = await insert_temp(data=data)
+    builder.button(text="Оплатил", callback_data=str(chat_id) + ";" + _id)
+    # logger.debug(str(service).replace(' ', ''))
     return builder.as_markup()

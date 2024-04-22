@@ -5,6 +5,7 @@ from loguru import logger
 import pandas as pd
 from utils.date import determine_month
 from typing import Dict
+from bson.objectid import ObjectId
 
 
 async def get_available_dates():
@@ -120,7 +121,9 @@ async def get_available_night_start_time(day: int) -> list[str]:
 
     # Генерация временных интервалов от 22:00 до 8:00 с шагом в один час
     start_time = datetime.strptime("22:00", "%H:%M")
-    end_time = datetime.strptime("08:00", "%H:%M") + timedelta(days=1)  # Следующий день, 08:00
+    end_time = datetime.strptime("08:00", "%H:%M") + timedelta(
+        days=1
+    )  # Следующий день, 08:00
     time_intervals = [
         (start_time + timedelta(hours=i), start_time + timedelta(hours=i + 1))
         for i in range((end_time - start_time).seconds // 3600)
@@ -154,7 +157,9 @@ async def get_available_night_start_time(day: int) -> list[str]:
 
 
 @logger.catch()
-async def get_available_end_time_night(day: int, start_time: str) -> list[dict[str, str]]:
+async def get_available_end_time_night(
+    day: int, start_time: str
+) -> list[dict[str, str]]:
     client = MongoClient("mongodb://mongodb:27017")
     db = client["room_616"]
     booking_collection = db["bookings"]
@@ -176,53 +181,31 @@ async def get_available_end_time_night(day: int, start_time: str) -> list[dict[s
     )
     logger.debug(f"occupied intervals: {occupied_intervals}")
 
-    # Сортировка занятых интервалов по времени начала
-    occupied_intervals.sort(key=lambda x: datetime.strptime(x["start_time"], "%H:%M"))
-
-    # Поиск ближайшей записи после времени начала
-    next_booking_index = next(
-        (
-            i
-            for i, occupied in enumerate(occupied_intervals)
-            if datetime.strptime(occupied["start_time"], "%H:%M").hour
-            > start_datetime.hour
-        ),
-        None,
-    )
-
-    # Генерация временных интервалов от 22:00 текущего дня до 08:00 следующего дня
-    start_time = datetime.strptime("22:00", "%H:%M")
-    end_time = datetime.strptime("08:00", "%H:%M") + timedelta(days=1)  # Следующий день, 08:00
-    time_intervals = [
-        (start_time + timedelta(hours=i), start_time + timedelta(hours=i + 1))
-        for i in range((end_time - start_time).seconds // 3600)
-    ]
-
-    if next_booking_index is not None:
-        # Если есть ближайшая запись, отфильтровать временные интервалы, оставив только те, которые еще могут быть
-        end_datetime = datetime.strptime(occupied_intervals[next_booking_index]["start_time"], "%H:%M")
-        time_intervals = [
-            (start, end)
-            for start, end in time_intervals
-            if start >= start_datetime and end <= end_datetime
-        ]
-    else:
-        # Если ближайшая запись только на следующий день, отфильтровать временные интервалы до 08:00 следующего дня
-        time_intervals = [
-            (start, end)
-            for start, end in time_intervals
-            if start >= start_datetime or end <= datetime.strptime("08:00", "%H:%M")
-        ]
-
     # Формирование списка свободных временных промежутков
-    free_end_times = [end.strftime("%H:%M") for start, end in time_intervals]
+    free_end_times = []
+
+    for occupied_interval in occupied_intervals:
+        end_datetime = datetime.strptime(occupied_interval["start_time"], "%H:%M")
+        if end_datetime > start_datetime:
+            free_end_times.append(end_datetime.strftime("%H:%M"))
+
+    if not free_end_times:  # Если нет свободного времени в тот же день
+        # Добавляем времена до 08:00 следующего дня
+        end_time = datetime.strptime("08:00", "%H:%M") + timedelta(
+            days=1
+        )  # Следующий день, 08:00
+        end_time_intervals = [
+            (start_datetime + timedelta(hours=i)).strftime("%H:%M")
+            for i in range(
+                1, (end_time - start_datetime).seconds // 3600 + 1
+            )  # Интервалы по 1 часу
+        ]
+        free_end_times.extend(end_time_intervals)
 
     # Закрытие соединения с MongoDB
     client.close()
 
     return free_end_times
-
-
 
 
 @logger.catch()
@@ -331,3 +314,29 @@ async def create_user(username: str, number: str) -> None:
     db = client["room_616"]
     users_collection: Collection = db["users"]
     users_collection.insert_one({"username": username, "number": number})
+
+
+@logger.catch()
+async def get_number(username: str) -> str:
+    client = MongoClient("mongodb://mongodb:27017")
+    db = client["room_616"]
+    users_collection: Collection = db["users"]
+    user = users_collection.find_one({"username": username})
+    return user["number"]
+
+
+@logger.catch()
+async def insert_temp(data) -> str:
+    client = MongoClient("mongodb://mongodb:27017")
+    db = client["room_616"]
+    temp: Collection = db["temp"]
+    _id = temp.insert_one(data).inserted_id
+    return str(_id)
+
+
+@logger.catch()
+async def find_temp(_id: str):
+    client = MongoClient("mongodb://mongodb:27017")
+    db = client["room_616"]
+    temp: Collection = db["temp"]
+    return temp.find_one(ObjectId(_id))
