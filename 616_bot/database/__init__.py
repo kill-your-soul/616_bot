@@ -278,9 +278,9 @@ async def write_booking(dict: Dict):
     db = client["room_616"]
     booking_collection = db["bookings"]
     users_collection = db["users"]
-    dict[
-        "date"
-    ] = f"2024-{str(determine_month(int(dict['day']))).zfill(2)}-{str(dict['day']).zfill(2)}"
+    dict["date"] = (
+        f"2024-{str(determine_month(int(dict['day']))).zfill(2)}-{str(dict['day']).zfill(2)}"
+    )
     dict.pop("day")
     booking_collection.insert_one(dict)
 
@@ -340,3 +340,43 @@ async def find_temp(_id: str):
     db = client["room_616"]
     temp: Collection = db["temp"]
     return temp.find_one(ObjectId(_id))
+
+
+@logger.catch()
+def get_admins() -> list:
+    client = MongoClient("mongodb://mongodb:27017")
+    db = client["room_616"]
+    collection: Collection = db["admins"]
+    ids = [element["id"] for element in collection.find()]
+    return ids
+
+
+@logger.catch()
+def get_prices_from_db():
+    client = MongoClient("mongodb://mongodb:27017")
+    db = client["room_616"]
+    collection: Collection = db["prices"]
+    return collection.find()
+
+
+@logger.catch()
+def update_price(title: str, price: int):
+    client = MongoClient("mongodb://mongodb:27017")
+    db = client["room_616"]
+    collection: Collection = db["prices"]
+    collection.update_one({"title": title}, {"$set": {"price": int(price)}})
+
+
+@logger.catch()
+def get_users():
+    client = MongoClient("mongodb://mongodb:27017")
+    db = client["room_616"]
+    collection: Collection = db["users"]
+    return collection.find()
+
+@logger.catch()
+def add_admin_in_db(admin_id: int):
+    client = MongoClient("mongodb://mongodb:27017")
+    db = client["room_616"]
+    collection: Collection = db["admins"]
+    collection.insert_one({"id": int(admin_id)})  

@@ -17,6 +17,7 @@ from loguru import logger
 def setup_handlers(dp: Dispatcher) -> None:
     dp.include_router(handlers.start.setup_handlers())
     dp.include_router(handlers.booking.setup_handlers())
+    dp.include_router(handlers.admin.setup_handlers())
 
 
 class InterceptHandler(logging.Handler):

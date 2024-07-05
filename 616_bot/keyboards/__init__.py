@@ -11,6 +11,7 @@ from database import (
     get_available_end_time,
     get_available_night_start_time,
     get_available_end_time_night,
+    get_prices_from_db,
     insert_temp,
 )
 
@@ -119,4 +120,19 @@ async def pay_inline_keyboard(chat_id: int, data: str) -> InlineKeyboardMarkup:
     _id = await insert_temp(data=data)
     builder.button(text="Оплатил", callback_data=str(chat_id) + ";" + _id)
     # logger.debug(str(service).replace(' ', ''))
-    return builder.as_markup()
+    return builder.as_markup(one_time_keyboard=True, resize_keyboard=True)
+
+
+async def get_admins_keyboard() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="Изменить цену").button(text="Посмотреть пользователей").button(
+        text="Добавить админа"
+    )
+    return builder.as_markup(one_time_keyboard=True, resize_keyboard=True)
+
+async def get_prices_keyboard() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    for item in get_prices_from_db():
+        builder.button(text=item["title"])
+        logger.debug(f"{item['title']} {item['price']}")
+    return builder.as_markup(one_time_keyboard=True, resize_keyboard=True)
